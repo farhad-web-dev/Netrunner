@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>NETRUNNER // NODE BREAKER PRO MAX - Project 18</title>
+  <style>
+    :root {
+      --primary: #00f0ff;
+      --secondary: #ff0055;
+      --accent: #ffe600;
+      --bg-dark: #050811;
+      --panel-bg: rgba(10, 16, 30, 0.85);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; font-family: 'Courier New', monospace; }
+    body { background-color: var(--bg-dark); color: var(--primary); min-height: 100vh; overflow-x: hidden; padding: 10px; display: flex; flex-direction: column; align-items: center; }
+    #matrix-canvas { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; opacity: 0.15; pointer-events: none; }
+    .cyber-container { position: relative; z-index: 2; width: 100%; max-width: 500px; display: flex; flex-direction: column; gap: 10px; }
+    .header-panel { background: var(--panel-bg); border: 1px solid var(--primary); box-shadow: 0 0 10px rgba(0, 240, 255, 0.2); border-radius: 6px; padding: 12px; text-align: center; }
+    .header-panel h1 { font-size: 1.2rem; text-transform: uppercase; letter-spacing: 2px; text-shadow: 0 0 8px var(--primary); }
+    .stats-row { display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.8rem; background: rgba(0,0,0,0.4); padding: 6px 10px; border-radius: 4px; }
+    .terminal-panel { background: rgba(5, 8, 15, 0.95); border: 1px solid var(--primary); border-radius: 6px; padding: 10px; height: 190px; display: flex; flex-direction: column; }
+    .terminal-logs { flex-grow: 1; overflow-y: auto; font-size: 0.75rem; line-height: 1.3; color: #a0f0ff; margin-bottom: 8px; font-family: monospace; }
+    .log-line { margin-bottom: 3px; word-break: break-all; }
+    .log-sys { color: var(--accent); }
+    .log-err { color: var(--secondary); }
+    .input-row { display: flex; align-items: center; background: rgba(0,240,255,0.05); border: 1px solid rgba(0,240,255,0.3); padding: 4px 8px; border-radius: 4px; }
+    .prompt { font-size: 0.8rem; margin-right: 6px; }
+    .cmd-input { background: transparent; border: none; outline: none; color: #fff; font-size: 0.85rem; width: 100%; }
+    .quick-bar { display: flex; gap: 5px; flex-wrap: wrap; justify-content: center; margin-top: 4px; }
+    .btn { background: rgba(0,240,255,0.1); border: 1px solid var(--primary); color: var(--primary); padding: 7px 10px; font-size: 0.7rem; font-weight: bold; border-radius: 4px; cursor: pointer; text-transform: uppercase; }
+    .btn:active { background: var(--primary); color: #000; }
+    .btn-danger { border-color: var(--secondary); color: var(--secondary); background: rgba(255,0,85,0.1); }
+    .btn-warn { border-color: var(--accent); color: var(--accent); background: rgba(255,230,0,0.1); }
+    .node-panel { background: var(--panel-bg); border: 1px solid var(--primary); border-radius: 6px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+    .node-card { background: rgba(0,0,0,0.5); border: 1px solid rgba(0,240,255,0.2); padding: 8px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; }
+    .node-card.breached { border-color: var(--accent); background: rgba(255, 230, 0, 0.05); }
+    .node-info h4 { font-size: 0.85rem; color: var(--primary); }
+    .node-info p { font-size: 0.7rem; color: #888; }
+    .hack-area { background: var(--panel-bg); border: 1px solid var(--secondary); border-radius: 6px; padding: 12px; display: none; flex-direction: column; align-items: center; gap: 10px; }
+    .hack-title { font-size: 0.9rem; color: var(--secondary); font-weight: bold; text-shadow: 0 0 5px var(--secondary); }
+    .hack-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; width: 100%; max-width: 250px; }
+    .grid-btn { aspect-ratio: 1; background: rgba(255,0,85,0.1); border: 1px solid var(--secondary); color: #fff; font-size: 1rem; font-weight: bold; display: flex; align-items: center; justify-content: center; border-radius: 4px; }
+    .grid-btn.active { background: var(--accent); border-color: var(--accent); color: #000; box-shadow: 0 0 10px var(--accent); }
+  </style>
+</head>
+<body>
+  <canvas id="matrix-canvas"></canvas>
+  
+  <div class="cyber-container">
+    <div class="header-panel">
+      <h1>Netrunner // Node Breaker</h1>
+      <div class="stats-row">
+        <span>RANK: <strong id="rank" style="color:var(--accent)">ROOKIE</strong></span>
+        <span>CREDITS: <strong id="credits" style="color:var(--primary)">0 ₵</strong></span>
+      </div>
+    </div>
+
+    <div class="terminal-panel">
+      <div class="terminal-logs" id="logs">
+        <div class="log-line log-sys">[SYSTEM READY] Tap 'SCAN' to locate targets or test new hacks!</div>
+      </div>
+      <div class="input-row">
+        <span class="prompt">root@netrunner:~#</span>
+        <input type="text" id="cmd" class="cmd-input" placeholder="Type command..." autocomplete="off">
+      </div>
+    </div>
+
+    <!-- EXPANDED QUICK EXEC BUTTONS -->
+    <div class="quick-bar">
+      <button class="btn" onclick="runCmd('scan')">SCAN</button>
+      <button class="btn" onclick="runCmd('hack 1')">HACK 1</button>
+      <button class="btn" onclick="runCmd('hack 2')">HACK 2</button>
+      <button class="btn" onclick="runCmd('hack 3')">HACK 3</button>
+      <button class="btn btn-warn" onclick="runCmd('ddos')">DDoS</button>
+      <button class="btn btn-warn" onclick="runCmd('bruteforce')">BRUTEFORCE</button>
+      <button class="btn btn-danger" onclick="runCmd('nuke')">NUKE</button>
+      <button class="btn" onclick="runCmd('upgrade')">UPGRADE RANK</button>
+      <button class="btn btn-danger" onclick="runCmd('clear')">CLEAR</button>
+    </div>
+
+    <div class="node-panel">
+      <h3 style="font-size: 0.8rem; letter-spacing: 1px;">TARGET NODES TOPOLOGY (<span id="breached-count">0</span>/3 BREACHED)</h3>
+      <div id="node-list" style="display:flex; flex-direction:column; gap:6px;">
+        <div style="font-size: 0.75rem; color:#666; text-align:center; padding: 10px;">Run 'SCAN' command to view network nodes.</div>
+      </div>
+    </div>
+
+    <div class="hack-area" id="hack-area">
+      <div class="hack-title" id="hack-title">ICE BREAKER: SEQUENCE MATCH</div>
+      <p style="font-size:0.75rem; color:#aaa;" id="hack-desc">Repeat the glowing node pattern!</p>
+      <div class="hack-grid" id="hack-grid"></div>
+    </div>
+  </div>
+
+  <script>
+    // Canvas Matrix
+    const canvas = document.getElementById('matrix-canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    const chars = '01ABCDEFGHIJKLMNOPQRSTUVWXYZ@#$%&*';
+    const drops = Array(Math.floor(canvas.width / 14)).fill(1);
+
+    function drawMatrix() {
+      ctx.fillStyle = 'rgba(5, 8, 17, 0.1)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#00f0ff';
+      ctx.font = '12px monospace';
+      drops.forEach((y, i) => {
+        const text = chars[Math.floor(Math.random() * chars.length)];
+        ctx.fillText(text, i * 14, y * 14);
+        if (y * 14 > canvas.height && Math.random() > 0.975) drops[i] = 0;
+        drops[i]++;
+      });
+    }
+    setInterval(drawMatrix, 50);
+
+    // Audio Synth
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function playBeep(freq = 440, type = 'sine', duration = 0.1) {
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = type; osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      osc.start(); osc.stop(audioCtx.currentTime + duration);
+    }
+
+    // State
+    let credits = parseInt(localStorage.getItem('net_credits') || '1050');
+    let breached = JSON.parse(localStorage.getItem('net_breached') || '[]');
+    let currentRankIndex = parseInt(localStorage.getItem('net_rank') || '0');
+    const ranks = ['ROOKIE', 'ELITE NETRUNNER', 'CYBER PHANTOM'];
+
+    let nukeCooldown = false;
+
+    const nodes = [
+      { id: 1, name: 'Local Gateway ICE', diff: 'EASY', reward: 150 },
+      { id: 2, name: 'Corporate Sub-Server', diff: 'MEDIUM', reward: 350 },
+      { id: 3, name: 'Mainframe Vault Node', diff: 'HARD', reward: 750 }
+    ];
+
+    function updateStats() {
+      document.getElementById('credits').innerText = credits + ' ₵';
+      document.getElementById('rank').innerText = ranks[currentRankIndex];
+    }
+    updateStats();
+
+    function log(msg, type = '') {
+      const logs = document.getElementById('logs');
+      const div = document.createElement('div');
+      div.className = 'log-line ' + (type === 'sys' ? 'log-sys' : type === 'err' ? 'log-err' : '');
+      div.innerText = '> ' + msg;
+      logs.appendChild(div);
+      logs.scrollTop = logs.scrollHeight;
+    }
+
+    function runCmd(cmd) {
+      cmd = cmd.trim().toLowerCase();
+      log(cmd);
+      playBeep(600, 'square', 0.05);
+
+      if (cmd === 'scan') {
+        log('Scanning local cyberspace subnet...', 'sys');
+        renderNodes();
+      } else if (cmd.startsWith('hack ')) {
+        const id = parseInt(cmd.split(' ')[1]);
+        if (id >= 1 && id <= 3) startHack(id);
+        else log('Invalid target node ID!', 'err');
+      } else if (cmd === 'ddos') {
+        runDDoS();
+      } else if (cmd === 'bruteforce') {
+        runBruteforce();
+      } else if (cmd === 'nuke') {
+        runNuke();
+      } else if (cmd === 'upgrade') {
+        upgradeRank();
+      } else if (cmd === 'clear') {
+        document.getElementById('logs').innerHTML = '';
+      } else {
+        log('Unknown command. Try SCAN, DDoS, BRUTEFORCE, NUKE, UPGRADE', 'err');
+      }
+    }
+
+    document.getElementById('cmd').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        runCmd(e.target.value);
+        e.target.value = '';
+      }
+    });
+
+    // NEW HACKS
+    function runDDoS() {
+      log('Launching packet flood attack (DDoS)...', 'sys');
+      let p = 0;
+      const interval = setInterval(() => {
+        p += 25;
+        playBeep(200 + p * 5, 'sawtooth', 0.05);
+        log(`Flooding packets... ${p}%`, 'sys');
+        if (p >= 100) {
+          clearInterval(interval);
+          log('DDoS SUCCESS! Enemy firewall temporarily disabled (+200 Credits)', 'sys');
+          credits += 200;
+          localStorage.setItem('net_credits', credits);
+          updateStats();
+        }
+      }, 300);
+    }
+
+    function runBruteforce() {
+      log('Injecting dictionary key hash brute-forcer...', 'sys');
+      let count = 0;
+      const interval = setInterval(() => {
+        count++;
+        const hash = Math.random().toString(36).substring(2, 10).toUpperCase();
+        log(`PASSKEY ATTEMPT #${count}: 0x${hash}`);
+        playBeep(700, 'sine', 0.02);
+        if (count >= 5) {
+          clearInterval(interval);
+          log('BRUTEFORCE OVERRIDE: Key Cracked! (+150 Credits)', 'sys');
+          credits += 150;
+          localStorage.setItem('net_credits', credits);
+          updateStats();
+        }
+      }, 250);
+    }
+
+    function runNuke() {
+      if (nukeCooldown) {
+        log('NUKE COOLDOWN IN PROGRESS! Wait 30s...', 'err');
+        return;
+      }
+      log('CRITICAL: Deploying ZERO-DAY MAINFRAME NUKE...', 'err');
+      playBeep(120, 'sawtooth', 0.5);
+      credits += 500;
+      localStorage.setItem('net_credits', credits);
+      updateStats();
+      log('BOOM! Node security wiped! Earned +500 Credits!', 'sys');
+      
+      nukeCooldown = true;
+      setTimeout(() => { nukeCooldown = false; log('NUKE PROTOCOL READY AGAIN.', 'sys'); }, 30000);
+    }
+
+    function upgradeRank() {
+      if (currentRankIndex >= ranks.length - 1) {
+        log('MAX RANK ATTAINED: CYBER PHANTOM 👑', 'sys');
+        return;
+      }
+      if (credits >= 1000) {
+        credits -= 1000;
+        currentRankIndex++;
+        localStorage.setItem('net_credits', credits);
+        localStorage.setItem('net_rank', currentRankIndex);
+        updateStats();
+        log(`RANK UPGRADED! You are now an [${ranks[currentRankIndex]}]! 🔥`, 'sys');
+        playBeep(900, 'triangle', 0.4);
+      } else {
+        log('UPGRADE REQUIRED: Need at least 1000 Credits!', 'err');
+      }
+    }
+
+    function renderNodes() {
+      const list = document.getElementById('node-list');
+      list.innerHTML = '';
+      let count = 0;
+      nodes.forEach(n => {
+        const isBreached = breached.includes(n.id);
+        if (isBreached) count++;
+        list.innerHTML += `
+          <div class="node-card ${isBreached ? 'breached' : ''}">
+            <div class="node-info">
+              <h4>NODE #${n.id}: ${n.name}</h4>
+              <p>DIFFICULTY: ${n.diff} | REWARD: ${n.reward} ₵</p>
+            </div>
+            <button class="btn ${isBreached ? 'btn-danger' : ''}" onclick="runCmd('hack ${n.id}')">
+              ${isBreached ? 'RE-BREACH' : 'BREACH'}
+            </button>
+          </div>
+        `;
+      });
+      document.getElementById('breached-count').innerText = count;
+    }
+
+    // Mini-Game Sequence
+    let currentSeq = [], userSeq = [], activeTarget = null;
+    function startHack(id) {
+      activeTarget = nodes.find(n => n.id === id);
+      log(`Initiating neural override on Node #${id}...`, 'sys');
+      const hackArea = document.getElementById('hack-area');
+      hackArea.style.display = 'flex';
+      
+      const grid = document.getElementById('hack-grid');
+      grid.innerHTML = '';
+      for (let i = 0; i < 6; i++) {
+        grid.innerHTML += `<button class="grid-btn" onclick="pressGrid(${i})" id="gb-${i}">${i+1}</button>`;
+      }
+
+      currentSeq = [];
+      userSeq = [];
+      const len = id + 2;
+      for (let i = 0; i < len; i++) currentSeq.push(Math.floor(Math.random() * 6));
+      
+      playSequence();
+    }
+
+    function playSequence() {
+      log('Observer sequence matrix...', 'sys');
+      let i = 0;
+      const interval = setInterval(() => {
+        if (i >= currentSeq.length) { clearInterval(interval); return; }
+        const btn = document.getElementById(`gb-${currentSeq[i]}`);
+        btn.classList.add('active');
+        playBeep(300 + currentSeq[i] * 100, 'sine', 0.2);
+        setTimeout(() => btn.classList.remove('active'), 300);
+        i++;
+      }, 600);
+    }
+
+    function pressGrid(idx) {
+      playBeep(400 + idx * 80, 'triangle', 0.1);
+      userSeq.push(idx);
+      const expected = currentSeq[userSeq.length - 1];
+      
+      if (idx !== expected) {
+        log('FIREWALL COUNTERMEASURE TRIGGERED! ACCESS DENIED.', 'err');
+        playBeep(150, 'sawtooth', 0.4);
+        document.getElementById('hack-area').style.display = 'none';
+        return;
+      }
+
+      if (userSeq.length === currentSeq.length) {
+        log(`BREACH SUCCESSFUL! Earned ${activeTarget.reward} Credits!`, 'sys');
+        playBeep(800, 'square', 0.3);
+        credits += activeTarget.reward;
+        if (!breached.includes(activeTarget.id)) breached.push(activeTarget.id);
+        
+        localStorage.setItem('net_credits', credits);
+        localStorage.setItem('net_breached', JSON.stringify(breached));
+        
+        updateStats();
+        document.getElementById('hack-area').style.display = 'none';
+        renderNodes();
+      }
+    }
+  </script>
+</body>
+</html>
